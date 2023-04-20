@@ -180,7 +180,7 @@ def generate_prompt(instruction, input=None):
     return PROMPT_TEMPLATE.format_map({'instruction': instruction})
 
 
-@torch.inference_mode()
+# @torch.inference_mode()
 def generate_base(model, tokenizer, params, device,
                   context_len=2048):
     prompt = params["prompt"]

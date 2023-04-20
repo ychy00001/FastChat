@@ -146,7 +146,7 @@ class ModelWorker:
             result = generate_base(self.model, self.tokenizer, params, self.device, self.context_len)
             ret = {
                 "text": result,
-                "error_code": 1,
+                "error_code": 0,
             }
             return ret
         except torch.cuda.OutOfMemoryError:
@@ -184,7 +184,6 @@ async def api_generate_stream(request: Request):
     global model_semaphore, global_counter
     global_counter += 1
     params = await request.json()
-
     if model_semaphore is None:
         model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
     await model_semaphore.acquire()
