@@ -175,9 +175,7 @@ PROMPT_TEMPLATE = (
 )
 
 
-def generate_prompt(instruction, input=None):
-    if input:
-        instruction = instruction + '\n' + input
+def generate_prompt(instruction):
     return PROMPT_TEMPLATE.format_map({'instruction': instruction})
 
 

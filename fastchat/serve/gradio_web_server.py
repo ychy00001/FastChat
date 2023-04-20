@@ -319,7 +319,7 @@ def build_demo():
             clear_btn = gr.Button(value="🚮  清除会话", interactive=False)
 
         with gr.Accordion("参数配置", open=False, visible=False) as parameter_row:
-            temperature = gr.Slider(minimum=0.0, maximum=1.0, value=0.7, step=0.1, interactive=True,
+            temperature = gr.Slider(minimum=0.0, maximum=1.0, value=0.9, step=0.1, interactive=True,
                                     label="Temperature", )
             max_output_tokens = gr.Slider(minimum=0, maximum=4096, value=128, step=64, interactive=True,
                                           label="Max output tokens", )
