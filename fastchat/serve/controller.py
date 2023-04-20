@@ -269,7 +269,7 @@ class Controller:
             return server_error_msg
         try:
             response = requests.post(worker_addr + "/worker_generate_base",
-                                     json=params, stream=True, timeout=15)
+                                     json=params, timeout=15)
             return response
         except requests.exceptions.RequestException as e:
             logger.info(f"worker timeout: {worker_addr}")
