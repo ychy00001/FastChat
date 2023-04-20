@@ -101,7 +101,7 @@ class ModelWorker:
             try:
                 ret = requests.post(url, json={
                     "worker_name": self.worker_addr,
-                    "queue_length": self.get_queue_length()}, timeout=5)
+                    "queue_length": self.get_queue_length()}, timeout=180)
                 exist = ret.json()["exist"]
                 break
             except requests.exceptions.RequestException as e:

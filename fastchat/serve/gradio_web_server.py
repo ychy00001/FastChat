@@ -321,7 +321,7 @@ def build_demo():
         with gr.Accordion("参数配置", open=False, visible=False) as parameter_row:
             temperature = gr.Slider(minimum=0.0, maximum=1.0, value=0.9, step=0.1, interactive=True,
                                     label="Temperature", )
-            max_output_tokens = gr.Slider(minimum=0, maximum=4096, value=128, step=64, interactive=True,
+            max_output_tokens = gr.Slider(minimum=0, maximum=4096, value=1024, step=64, interactive=True,
                                           label="Max output tokens", )
 
         # gr.Markdown(learn_more_markdown)
