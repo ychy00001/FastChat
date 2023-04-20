@@ -189,8 +189,7 @@ async def api_generate_stream(request: Request):
         model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
     await model_semaphore.acquire()
     generator = worker.generate_base_gate(params)
-    background_tasks = BackgroundTasks()
-    background_tasks.add_task(release_model_semaphore)
+    release_model_semaphore()
     return generator
 
 

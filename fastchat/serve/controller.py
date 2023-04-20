@@ -270,10 +270,10 @@ class Controller:
         try:
             response = requests.post(worker_addr + "/worker_generate_base",
                                      json=params, timeout=15)
-            return response.content
+            return json.loads(response.content)
         except requests.exceptions.RequestException as e:
             logger.info(f"worker timeout: {worker_addr}")
-            return e.strerror
+            return {e.strerror}
 
     # Let the controller act as a worker to achieve hierarchical
     # management. This can be used to connect isolated sub networks.
