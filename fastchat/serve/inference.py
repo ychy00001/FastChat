@@ -190,7 +190,6 @@ def generate_base(model, tokenizer, params, device,
     max_new_tokens = int(params.get("max_new_tokens", 256))
     top_k = int(params.get("top_k", 50))
     top_p = float(params.get("top_p", 1.0))
-    keep_prompt = bool(params.get("keep_prompt", False))
     assert isinstance(top_k, int) and top_k >= 0, "`top_k` should be a positive integer."
     assert 0 <= top_p <= 1, "`top_p` should be between 0 and 1."
 
@@ -232,9 +231,8 @@ def generate_base(model, tokenizer, params, device,
         )
         s = generation_output[0]
         output = tokenizer.decode(s, skip_special_tokens=True)
-        if keep_prompt is False:
-            # remote prompt
-            output = output[l_prompt:]
+        # remote prompt
+        output = output[l_prompt:]
         if template is not None:
             output = output.split("### Response:")[1].strip()
         return output
