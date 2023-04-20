@@ -143,13 +143,18 @@ class ModelWorker:
 
     def generate_base_gate(self, params):
         try:
-            return generate_base(self.model, self.tokenizer, params, self.device, self.context_len)
+            result = generate_base(self.model, self.tokenizer, params, self.device, self.context_len)
+            ret = {
+                "text": result,
+                "error_code": 1,
+            }
+            return ret
         except torch.cuda.OutOfMemoryError:
             ret = {
                 "text": server_error_msg,
                 "error_code": 1,
             }
-            json.dumps(ret).encode('utf8')
+            return ret
 
 
 app = FastAPI()
@@ -186,7 +191,7 @@ async def api_generate_stream(request: Request):
     generator = worker.generate_base_gate(params)
     background_tasks = BackgroundTasks()
     background_tasks.add_task(release_model_semaphore)
-    return StreamingResponse(generator, background=background_tasks)
+    return generator
 
 
 @app.post("/worker_get_status")
