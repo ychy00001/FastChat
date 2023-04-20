@@ -16,6 +16,7 @@ from fastchat.serve.compression import compress_module
 from fastchat.serve.monkey_patch_non_inplace import replace_llama_attn_with_non_inplace_operations
 from fastchat.serve.serve_chatglm import chatglm_generate_stream
 
+
 def raise_warning_for_old_weights(model_path, model):
     if "vicuna" in model_path.lower():
         try:
@@ -217,7 +218,7 @@ def generate_base(model, tokenizer, params, device,
 
     with torch.no_grad():
         raw_input_text = prompt
-        if template is not None:
+        if template == "normal":
             input_text = generate_prompt(instruction=raw_input_text)
         else:
             input_text = raw_input_text

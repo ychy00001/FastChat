@@ -321,7 +321,7 @@ def build_demo():
         with gr.Accordion("参数配置", open=False, visible=False) as parameter_row:
             temperature = gr.Slider(minimum=0.0, maximum=1.0, value=0.7, step=0.1, interactive=True,
                                     label="Temperature", )
-            max_output_tokens = gr.Slider(minimum=0, maximum=1024, value=128, step=64, interactive=True,
+            max_output_tokens = gr.Slider(minimum=0, maximum=4096, value=128, step=64, interactive=True,
                                           label="Max output tokens", )
 
         # gr.Markdown(learn_more_markdown)
@@ -363,16 +363,22 @@ def build_demo():
     return demo
 
 
-invite_code_list = ["qwer", "5KLf3l8P3bRA", "Ly8Z0bkNd3Nr", "x9HLvBM5Six5", "PBaLNb60lhO5", "2mm7zI6toDcx",
-                    "hDHHWvHoXWy8"]
+invite_code_list_file = "/data/project/FastChat/passwd"
+invite_code_list = []
+f = open(invite_code_list_file)  # 返回一个文件对象
+line = f.readline()  # 调用文件的 readline()方法
+while line:
+    if line.isspace():
+        continue
+    invite_code_list.append(line.strip())
+    line = f.readline()
+f.close()
 
 
 def simple_auth(username, password):
     # 记录登录日志
     logger.info(f"##login## : {password}")
-    if username == "cloudwalk":
-        return password in invite_code_list
-    return False
+    return password in invite_code_list
 
 
 if __name__ == "__main__":

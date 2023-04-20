@@ -332,3 +332,8 @@ sky spot launch -n vicuna scripts/train-vicuna.yaml --env WANDB_API_KEY
 sky launch -c vicuna -s scripts/train-vicuna.yaml --env WANDB_API_KEY --env MODEL_SIZE=7
 ```
 Note: Please make sure the `WANDB_API_KEY` has been setup on your local machine. You can find the API key on your [wandb profile page](https://wandb.ai/authorize). If you would like to train the model without using wandb, you can replace the `--env WANDB_API_KEY` flag with `--env WANDB_MODE=offline`.
+
+# 虚拟环境开启auth授权后websock报错
+```
+RUN sed -i 's/websocket\.cookies\.get("access-token")/websocket.cookies.get("access-token-unsecure")/' ./project/FastChat/venv/lib/python3.10/site-packages/gradio/routes.py
+```

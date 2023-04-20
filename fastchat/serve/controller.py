@@ -350,8 +350,10 @@ async def worker_api_generate(request: Request):
 @app.post("/worker_base")
 async def worker_api_generate(request: Request):
     params = await request.json()
-    result = controller.worker_api_base(params)
-    return {"text": result}
+    if params["auth"] == "TFof5o2HCi89znJh2v":
+        result = controller.worker_api_base(params)
+        return {"text": result}
+    return {"error": "授权异常"}
 
 
 @app.post("/worker_get_status")
