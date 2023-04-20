@@ -270,7 +270,7 @@ class Controller:
         try:
             response = requests.post(worker_addr + "/worker_generate_base",
                                      json=params, timeout=15)
-            return response
+            return response.content
         except requests.exceptions.RequestException as e:
             logger.info(f"worker timeout: {worker_addr}")
             return e.strerror
