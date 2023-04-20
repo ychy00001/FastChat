@@ -186,8 +186,8 @@ def generate_base(model, tokenizer, params, device,
     prompt = params["prompt"]
     l_prompt = len(prompt)
     template = params.get("template", None)
-    temperature = float(params.get("temperature", 1.0))
-    max_new_tokens = int(params.get("max_new_tokens", 256))
+    temperature = float(params.get("temperature", 0.9))
+    max_new_tokens = int(params.get("max_new_tokens", 4000))
     top_k = int(params.get("top_k", 50))
     top_p = float(params.get("top_p", 1.0))
     assert isinstance(top_k, int) and top_k >= 0, "`top_k` should be a positive integer."
@@ -197,7 +197,10 @@ def generate_base(model, tokenizer, params, device,
         temperature=temperature,
         top_k=top_k,
         top_p=top_p,
-        max_new_tokens=max_new_tokens
+        max_new_tokens=max_new_tokens,
+        do_sample=True,
+        num_beams=1,
+        repetition_penalty=1.0,
     )
 
     stop_str = params.get("stop", None)
@@ -231,10 +234,11 @@ def generate_base(model, tokenizer, params, device,
         )
         s = generation_output[0]
         output = tokenizer.decode(s, skip_special_tokens=True)
-        # remote prompt
-        output = output[l_prompt:]
         if template is not None:
             output = output.split("### Response:")[1].strip()
+        else:
+            # remote prompt
+            output = output[l_prompt:]
         return output
 
 
