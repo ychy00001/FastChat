@@ -235,9 +235,9 @@ def generate_base(model, tokenizer, params, device,
         )
         s = generation_output[0]
         output = tokenizer.decode(s, skip_special_tokens=True)
+        response = output
         if template is not None:
             response = output.split("### Response:")[1].strip()
-        # response = output
         return response
 
 
