@@ -20,4 +20,5 @@ dist
 wandb
 output
 venv
-log
+log/*
+!log/.gitkeep
