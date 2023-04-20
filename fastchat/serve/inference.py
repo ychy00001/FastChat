@@ -15,10 +15,6 @@ from fastchat.conversation import conv_templates, get_default_conv_template, Sep
 from fastchat.serve.compression import compress_module
 from fastchat.serve.monkey_patch_non_inplace import replace_llama_attn_with_non_inplace_operations
 from fastchat.serve.serve_chatglm import chatglm_generate_stream
-from fastchat.utils import (build_logger, server_error_msg,
-                            pretty_print_semaphore)
-
-logger = build_logger("model_inference", f"/data/project/FastChat/log/model_inference.log")
 
 def raise_warning_for_old_weights(model_path, model):
     if "vicuna" in model_path.lower():
@@ -224,7 +220,6 @@ def generate_base(model, tokenizer, params, device,
         try:
             inputs = tokenizer(input_text, return_tensors="pt")
         except Exception as e:
-            logger.info(f"Error: {e}! Please input again.")
             return f"tokenizer error: {e}"
         generation_output = model.generate(
             input_ids=inputs["input_ids"].cuda(),
