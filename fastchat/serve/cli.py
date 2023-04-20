@@ -106,8 +106,8 @@ def main(args):
         raise ValueError(f"Invalid style for console: {args.style}")
     try:
         chat_loop(args.model_path, args.device, args.num_gpus, args.max_gpu_memory,
-            args.load_8bit, args.conv_template, args.temperature, args.max_new_tokens,
-            chatio, args.debug)
+                  args.load_8bit, args.conv_template, args.temperature, args.max_new_tokens,
+                  chatio, args.debug)
     except KeyboardInterrupt:
         print("exit...")
 
@@ -115,14 +115,13 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-path", type=str, default="facebook/opt-350m",
-        help="The path to the weights")
+                        help="The path to the weights")
     parser.add_argument("--device", type=str, choices=["cpu", "cuda", "mps"], default="cuda")
     parser.add_argument("--num-gpus", type=str, default="1")
-    parser.add_argument("--max-gpu-memory", type=str, default="13GiB")
     parser.add_argument("--load-8bit", action="store_true",
-        help="Use 8-bit quantization.")
+                        help="Use 8-bit quantization.")
     parser.add_argument("--conv-template", type=str, default=None,
-        help="Conversation prompt template.")
+                        help="Conversation prompt template.")
     parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--style", type=str, default="simple",

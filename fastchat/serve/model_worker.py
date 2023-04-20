@@ -14,6 +14,7 @@ import uuid
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 import requests
+
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer, AutoModel
 except ImportError:
@@ -22,22 +23,21 @@ import torch
 import uvicorn
 
 from fastchat.constants import WORKER_HEART_BEAT_INTERVAL
-from fastchat.serve.inference import load_model, generate_stream
+from fastchat.serve.inference import load_model, generate_stream, generate_base
 from fastchat.serve.serve_chatglm import chatglm_generate_stream
 from fastchat.utils import (build_logger, server_error_msg,
-    pretty_print_semaphore)
+                            pretty_print_semaphore)
 
 GB = 1 << 30
 
 worker_id = str(uuid.uuid4())[:6]
-logger = build_logger("model_worker", f"model_worker_{worker_id}.log")
+logger = build_logger("model_worker", f"/data/project/FastChat/log/model_worker_{worker_id}.log")
 global_counter = 0
 
 model_semaphore = None
 
 
 def heart_beat_worker(controller):
-
     while True:
         time.sleep(WORKER_HEART_BEAT_INTERVAL)
         controller.send_heart_beat()
@@ -128,7 +128,7 @@ class ModelWorker:
     def generate_stream_gate(self, params):
         try:
             for output in self.generate_stream_func(self.model, self.tokenizer,
-                    params, self.device, self.context_len, args.stream_interval):
+                                                    params, self.device, self.context_len, args.stream_interval):
                 ret = {
                     "text": output,
                     "error_code": 0,
@@ -140,6 +140,16 @@ class ModelWorker:
                 "error_code": 1,
             }
             yield json.dumps(ret).encode() + b"\0"
+
+    def generate_base_gate(self, params):
+        try:
+            return generate_base(self.model, self.tokenizer, params, self.device, self.context_len)
+        except torch.cuda.OutOfMemoryError:
+            ret = {
+                "text": server_error_msg,
+                "error_code": 1,
+            }
+            json.dumps(ret).encode('utf8')
 
 
 app = FastAPI()
@@ -164,6 +174,21 @@ async def api_generate_stream(request: Request):
     return StreamingResponse(generator, background=background_tasks)
 
 
+@app.post("/worker_generate_base")
+async def api_generate_stream(request: Request):
+    global model_semaphore, global_counter
+    global_counter += 1
+    params = await request.json()
+
+    if model_semaphore is None:
+        model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
+    await model_semaphore.acquire()
+    generator = worker.generate_base_gate(params)
+    background_tasks = BackgroundTasks()
+    background_tasks.add_task(release_model_semaphore)
+    return StreamingResponse(generator, background=background_tasks)
+
+
 @app.post("/worker_get_status")
 async def api_get_status(request: Request):
     return worker.get_status()
@@ -174,13 +199,13 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=21002)
     parser.add_argument("--worker-address", type=str,
-        default="http://localhost:21002")
+                        default="http://localhost:21002")
     parser.add_argument("--controller-address", type=str,
-        default="http://localhost:21001")
+                        default="http://localhost:21001")
     parser.add_argument("--model-path", type=str, default="facebook/opt-350m",
-        help="The path to the weights")
+                        help="The path to the weights")
     parser.add_argument("--model-name", type=str,
-        help="Optional name")
+                        help="Optional name")
     parser.add_argument("--device", type=str, choices=["cpu", "cuda", "mps"], default="cuda")
     parser.add_argument("--num-gpus", type=int, default=1)
     parser.add_argument("--max-gpu-memory", type=str, default="13GiB")

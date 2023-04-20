@@ -20,3 +20,4 @@ dist
 wandb
 output
 venv
+log
