@@ -82,11 +82,11 @@ def load_model(model_path, device, num_gpus, max_gpu_memory="13GiB",
     else:
         tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
         model = AutoModelForCausalLM.from_pretrained(model_path,
-                                                     low_cpu_mem_usage=True, **kwargs)
+                                                     low_cpu_mem_usage=True, load_in_8bit=load_8bit, **kwargs)
         raise_warning_for_old_weights(model_path, model)
 
-    if load_8bit:
-        compress_module(model, device)
+    # if load_8bit:
+    #     compress_module(model, device)
 
     if (device == "cuda" and num_gpus == 1) or device == "mps":
         model.to(device)
