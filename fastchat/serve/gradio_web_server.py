@@ -286,16 +286,6 @@ pre {
     white-space: -o-pre-wrap;    /* Opera 7 */
     word-wrap: break-word;       /* Internet Explorer 5.5+ */
 }
-
-.svelte-mppz8v: first-child{
-    display: none;
-}
-.svelte-1gfkn6j:{
-    display: none;
-}
-.svelte-1ogxbi0:{
-    display: none;
-}
 """
 
 
