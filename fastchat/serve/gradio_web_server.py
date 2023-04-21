@@ -401,4 +401,4 @@ if __name__ == "__main__":
     demo = build_demo()
     demo.queue(concurrency_count=args.concurrency_count, status_update_rate=10,
                api_open=False).launch(server_name=args.host, server_port=args.port,
-                                      share=args.share, max_threads=200, auth=simple_auth, auth_message="请输入您的内测邀请码")
+                                      share=args.share, max_threads=200, auth=simple_auth, auth_message="用户名为cloudwalk  密码为您的内测邀请码")
