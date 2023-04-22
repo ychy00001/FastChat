@@ -189,6 +189,10 @@ def generate_base(model, tokenizer, params, device,
     max_new_tokens = int(params.get("max_new_tokens", 4000))
     top_k = int(params.get("top_k", 50))
     top_p = float(params.get("top_p", 1.0))
+    do_sample = bool(params.get("do_sample", True))
+    repetition_penalty = float(params.get("repetition_penalty", 1.0))
+    print(f'do_sample: {do_sample}')
+    print(f'repetition_penalty: {repetition_penalty}')
     assert isinstance(top_k, int) and top_k >= 0, "`top_k` should be a positive integer."
     assert 0 <= top_p <= 1, "`top_p` should be between 0 and 1."
 
@@ -197,9 +201,9 @@ def generate_base(model, tokenizer, params, device,
         top_k=top_k,
         top_p=top_p,
         max_new_tokens=max_new_tokens,
-        do_sample=True,
+        do_sample=do_sample,
         num_beams=1,
-        repetition_penalty=1.0,
+        repetition_penalty=repetition_penalty,
     )
 
     stop_str = params.get("stop", None)
