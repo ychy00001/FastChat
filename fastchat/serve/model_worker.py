@@ -10,6 +10,8 @@ import time
 from typing import List, Union
 import threading
 import uuid
+import socket
+import sys
 
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -197,27 +199,55 @@ async def api_get_status(request: Request):
     return worker.get_status()
 
 
+def check_port_in_use(port, host='127.0.0.1'):
+    s = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        s.connect((host, int(port)))
+        return True
+    except socket.error:
+        return False
+    finally:
+        if s:
+            s.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", type=str, default="localhost")
-    parser.add_argument("--port", type=int, default=21002)
+    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--worker-address", type=str,
-                        default="http://localhost:21002")
+                        default="http://127.0.0.1:8090")
     parser.add_argument("--controller-address", type=str,
-                        default="http://localhost:21001")
+                        default="http://127.0.0.1:8081")
     parser.add_argument("--model-path", type=str, default="facebook/opt-350m",
                         help="The path to the weights")
     parser.add_argument("--model-name", type=str,
                         help="Optional name")
     parser.add_argument("--device", type=str, choices=["cpu", "cuda", "mps"], default="cuda")
-    parser.add_argument("--num-gpus", type=int, default=1)
-    parser.add_argument("--max-gpu-memory", type=str, default="13GiB")
+    parser.add_argument("--num-gpus", type=int, default=4)
+    parser.add_argument("--max-gpu-memory", type=str, default="75GiB")
     parser.add_argument("--load-8bit", action="store_true")
-    parser.add_argument("--limit-model-concurrency", type=int, default=5)
+    parser.add_argument("--limit-model-concurrency", type=int, default=10)
     parser.add_argument("--stream-interval", type=int, default=2)
     parser.add_argument("--no-register", action="store_true")
     args = parser.parse_args()
     logger.info(f"args: {args}")
+
+    # 自动检测端口号
+    try_count = 0
+    port = args.port
+    while check_port_in_use(args.port):
+        args.port += 1
+        time.sleep(1)
+        try_count += 1
+        if try_count == 10:
+            print("尝试获取端口失败，请关闭8090-8100间端口重试")
+            sys.exit(1)
+
+    if args.worker_address == "http://127.0.0.1:8090" and args.port != 8090:
+        args.worker_address = "http://{}:{}".format(args.host, args.port)
 
     worker = ModelWorker(args.controller_address,
                          args.worker_address,
