@@ -185,7 +185,7 @@ def generate_base(model, tokenizer, params, device,
     prompt = params["prompt"]
     l_prompt = len(prompt)
     template = params.get("template", None)
-    temperature = float(params.get("temperature", 0.9))
+    temperature = float(params.get("temperature", 0.2))
     max_new_tokens = int(params.get("max_new_tokens", 4000))
     top_k = int(params.get("top_k", 50))
     top_p = float(params.get("top_p", 1.0))
