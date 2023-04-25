@@ -17,6 +17,7 @@ from fastchat.serve.monkey_patch_non_inplace import replace_llama_attn_with_non_
 from fastchat.serve.serve_chatglm import chatglm_generate_stream
 from fastchat.serve.ds_pip import DSPipeline
 import deepspeed
+import os
 
 
 def raise_warning_for_old_weights(model_path, model):
@@ -104,7 +105,7 @@ def generate_stream(model, tokenizer, params, device,
                     context_len=2048, stream_interval=2):
     prompt = params["prompt"]
     l_prompt = len(prompt)
-    temperature = float(params.get("temperature", 1.0))
+    temperature = float(params.get("temperature", 0.5))
     max_new_tokens = int(params.get("max_new_tokens", 256))
 
     # TODO ADD top_k top_p parameter
@@ -252,10 +253,12 @@ def generate_ds(model, tokenizer, params, device,
     """
     Deepspeed 模型加速
     """
+    world_size = int(os.getenv('WORLD_SIZE', str(num_gpus)))
+    local_rank = int(os.getenv('LOCAL_RANK', '0'))
     prompt = params["prompt"]
     l_prompt = len(prompt)
     template = params.get("template", None)
-    temperature = float(params.get("temperature", 0.2))
+    temperature = float(params.get("temperature", 0.5))
     max_new_tokens = int(params.get("max_new_tokens", 4000))
     top_k = int(params.get("top_k", 50))
     top_p = float(params.get("top_p", 1.0))
