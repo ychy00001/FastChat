@@ -25,7 +25,7 @@ import torch
 import uvicorn
 
 from fastchat.constants import WORKER_HEART_BEAT_INTERVAL
-from fastchat.serve.inference import load_model, generate_stream, generate_base
+from fastchat.serve.inference import load_model, generate_stream, generate_base, generate_ds
 from fastchat.serve.serve_chatglm import chatglm_generate_stream
 from fastchat.utils import (build_logger, server_error_msg,
                             pretty_print_semaphore)
@@ -56,6 +56,7 @@ class ModelWorker:
             model_path = model_path[:-1]
         self.model_name = model_name or model_path.split("/")[-1]
         self.device = device
+        self.num_gpus = num_gpus
 
         logger.info(f"Loading the model {self.model_name} on worker {worker_id} ...")
         self.model, self.tokenizer = load_model(
@@ -158,6 +159,21 @@ class ModelWorker:
             }
             return ret
 
+    def generate_ds_gate(self,params):
+        try:
+            result = generate_ds(self.model, self.tokenizer, params, self.device, self.num_gpus)
+            ret = {
+                "text": result,
+                "error_code": 0,
+            }
+            return ret
+        except torch.cuda.OutOfMemoryError:
+            ret = {
+                "text": server_error_msg,
+                "error_code": 1,
+            }
+            return ret
+
 
 app = FastAPI()
 
@@ -182,7 +198,7 @@ async def api_generate_stream(request: Request):
 
 
 @app.post("/worker_generate_base")
-async def api_generate_stream(request: Request):
+async def api_generate_base(request: Request):
     global model_semaphore, global_counter
     global_counter += 1
     params = await request.json()
@@ -190,6 +206,19 @@ async def api_generate_stream(request: Request):
         model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
     await model_semaphore.acquire()
     generator = worker.generate_base_gate(params)
+    release_model_semaphore()
+    return generator
+
+
+@app.post("/worker_generate_ds")
+async def api_generate_ds(request: Request):
+    global model_semaphore, global_counter
+    global_counter += 1
+    params = await request.json()
+    if model_semaphore is None:
+        model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
+    await model_semaphore.acquire()
+    generator = worker.generate_ds_gate(params)
     release_model_semaphore()
     return generator
 
