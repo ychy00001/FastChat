@@ -272,7 +272,7 @@ def generate_ds(model, tokenizer, params, device,
     pipe = DSPipeline(model=model,
                       tokenizer=tokenizer,
                       dtype=data_type,
-                      device=device)
+                      device=local_rank)
     pipe.model = deepspeed.init_inference(pipe.model,
                                           dtype=data_type,
                                           mp_size=num_gpus,
