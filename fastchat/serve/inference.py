@@ -286,7 +286,7 @@ def generate_stream(
             if template is not None and template == "normal":
                 output = output.split("### Response:")[1].strip()
             elif template is not None and template == "chat":
-                output = output.split("### Assistant:")[1].strip()
+                output = output.split("### Response:")[1].strip()
             # else:
                 # output = output[l_prompt:]
             yield output
@@ -306,10 +306,9 @@ PROMPT_TEMPLATE = (
 )
 
 CHAT_TEMPLATE = (
-    "If you are a artificial intelligence assistant, "
-    "please answer the user questions based on the user asks and descriptions."
-    "History:{history}\n"
-    "User:{instruction}\n### Assistant:"
+    "Below is an instruction that describes a task, paired with an input that provides further context. "
+    "Write a response that appropriately completes the request.\n\n"
+    "### Instruction:\n{history}\n\n### Input:\n{instruction}\n\n### Response:"
 )
 
 
@@ -385,7 +384,7 @@ def generate_base(model, tokenizer, params, device,
         if template is not None and template == "normal":
             output = output.split("### Response:")[1].strip()
         elif template is not None and template == "chat":
-            output = output.split("### Assistant:")[1].strip()
+            output = output.split("### Response:")[1].strip()
         else:
             # remote prompt
             output = output[l_prompt:]
