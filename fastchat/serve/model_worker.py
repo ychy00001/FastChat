@@ -385,10 +385,8 @@ if __name__ == "__main__":
                         default="http://127.0.0.1:8090")
     parser.add_argument("--controller-address", type=str,
                         default="http://127.0.0.1:8081")
-    parser.add_argument("--model-name", type=str,
-                        help="Optional name")
-    parser.add_argument("--limit-model-concurrency", type=int, default=10)
     add_model_args(parser)
+    parser.add_argument("--model-name", type=str, help="Optional display name")
     parser.add_argument("--limit-model-concurrency", type=int, default=5)
     parser.add_argument("--stream-interval", type=int, default=2)
     parser.add_argument("--no-register", action="store_true")
