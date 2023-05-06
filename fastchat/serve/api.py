@@ -6,7 +6,7 @@ python3 -m fastchat.serve.api
 
 Reference: https://platform.openai.com/docs/api-reference/chat/create
 """
-
+import asyncio
 from typing import Union, Dict, List, Any
 
 import argparse
@@ -14,14 +14,22 @@ import json
 import logging
 
 import fastapi
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import uvicorn
 from pydantic import BaseSettings
 
 from fastchat.protocol.chat_completion import (
-    ChatCompletionRequest, ChatCompletionResponse, ChatMessage, ChatCompletionResponseChoice)
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChatMessage,
+    ChatCompletionResponseChoice,
+    CompletionRequest,
+    CompletionResponse,
+    EmbeddingsRequest,
+    EmbeddingsResponse,
+)
 from fastchat.conversation import get_default_conv_template, SeparatorStyle
-from fastchat.serve.inference import compute_skip_echo_len
 
 logger = logging.getLogger(__name__)
 
@@ -36,26 +44,45 @@ app = fastapi.FastAPI()
 headers = {"User-Agent": "FastChat API Server"}
 
 
+@app.get("/v1/models")
+async def show_available_models():
+    controller_url = app_settings.FASTCHAT_CONTROLLER_URL
+    async with httpx.AsyncClient() as client:
+        ret = await client.post(controller_url + "/refresh_all_workers")
+        ret = await client.post(controller_url + "/list_models")
+    models = ret.json()["models"]
+    models.sort()
+    return {"data": [{"id": m} for m in models], "object": "list"}
+
+
 @app.post("/v1/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     """Creates a completion for the chat message"""
-    payload, skip_echo_len = generate_payload(
+    gen_params = get_gen_params(
         request.model,
         request.messages,
         temperature=request.temperature,
         max_tokens=request.max_tokens,
-        stop=request.stop)
+        echo=False,
+        stop=request.stop,
+    )
 
     choices = []
     # TODO: batch the requests. maybe not necessary if using CacheFlow worker
+    chat_completions = []
     for i in range(request.n):
-        content = await chat_completion(request.model, payload, skip_echo_len)
+        content = asyncio.create_task(chat_completion(request.model, gen_params))
+        chat_completions.append(content)
+
+    for i, content_task in enumerate(chat_completions):
+        content = await content_task
         choices.append(
             ChatCompletionResponseChoice(
                 index=i,
                 message=ChatMessage(role="assistant", content=content),
                 # TODO: support other finish_reason
-                finish_reason="stop")
+                finish_reason="stop",
+            )
         )
 
     # TODO: support usage field
@@ -67,17 +94,17 @@ async def create_chat_completion(request: ChatCompletionRequest):
     return ChatCompletionResponse(choices=choices)
 
 
-
-def generate_payload(model_name: str, messages: List[Dict[str, str]],
-                     *, temperature: float, max_tokens: int, stop: Union[str, None]):
+def get_gen_params(
+    model_name: str,
+    messages: List[Dict[str, str]],
+    *,
+    temperature: float,
+    max_tokens: int,
+    echo: bool,
+    stop: Union[str, None],
+):
     is_chatglm = "chatglm" in model_name.lower()
-    # TODO(suquark): The template is currently a reference. Here we have to make a copy.
-    # We use create a template factory to avoid this.
-    conv = get_default_conv_template(model_name).copy()
-
-    # TODO(suquark): Conv.messages should be a list. But it is a tuple now.
-    #  We should change it to a list.
-    conv.messages = list(conv.messages)
+    conv = get_default_conv_template(model_name)
 
     for message in messages:
         msg_role = message["role"]
@@ -89,39 +116,37 @@ def generate_payload(model_name: str, messages: List[Dict[str, str]],
             conv.append_message(conv.roles[1], message["content"])
         else:
             raise ValueError(f"Unknown role: {msg_role}")
-    
+
     # Add a blank message for the assistant.
     conv.append_message(conv.roles[1], None)
 
     if is_chatglm:
-        prompt = conv.messages[conv.offset:]
+        prompt = conv.messages[conv.offset :]
     else:
         prompt = conv.get_prompt()
-    skip_echo_len = compute_skip_echo_len(model_name, conv, prompt)
 
-    if stop is None:
-        stop = conv.sep if conv.sep_style == SeparatorStyle.SINGLE else conv.sep2
-
-    # TODO(suquark): We should get the default `max_new_tokens`` from the model.
     if max_tokens is None:
         max_tokens = 512
 
-    payload = {
+    gen_params = {
         "model": model_name,
         "prompt": prompt,
         "temperature": temperature,
         "max_new_tokens": max_tokens,
-        "stop": stop,
+        "echo": echo,
+        "stop": conv.stop_str,
+        "stop_token_ids": conv.stop_token_ids,
     }
+    logger.debug(f"==== request ====\n{gen_params}")
+    return gen_params
 
-    logger.debug(f"==== request ====\n{payload}")
-    return payload, skip_echo_len
 
-
-async def chat_completion(model_name: str, payload: Dict[str, Any], skip_echo_len: int):
+async def chat_completion(model_name: str, gen_params: Dict[str, Any]):
     controller_url = app_settings.FASTCHAT_CONTROLLER_URL
     async with httpx.AsyncClient() as client:
-        ret = await client.post(controller_url + "/get_worker_address", json={"model": model_name})
+        ret = await client.post(
+            controller_url + "/get_worker_address", json={"model": model_name}
+        )
         worker_addr = ret.json()["address"]
         # No available worker
         if worker_addr == "":
@@ -131,8 +156,13 @@ async def chat_completion(model_name: str, payload: Dict[str, Any], skip_echo_le
 
         output = ""
         delimiter = b"\0"
-        async with client.stream("POST", worker_addr + "/worker_generate_stream",
-                                 headers=headers, json=payload, timeout=20) as response:
+        async with client.stream(
+            "POST",
+            worker_addr + "/worker_generate_stream",
+            headers=headers,
+            json=gen_params,
+            timeout=20,
+        ) as response:
             content = await response.aread()
 
         for chunk in content.split(delimiter):
@@ -140,15 +170,149 @@ async def chat_completion(model_name: str, payload: Dict[str, Any], skip_echo_le
                 continue
             data = json.loads(chunk.decode())
             if data["error_code"] == 0:
-                output = data["text"][skip_echo_len:].strip()
+                output = data["text"].strip()
 
         return output
 
 
+@app.post("/v1/completions")
+async def create_completion(request: CompletionRequest):
+    payload = {
+        "model": request.model,
+        "prompt": request.prompt,
+        "temperature": request.temperature,
+        "max_tokens": request.max_tokens,
+        "logprobs": request.logprobs,
+    }
+
+    if request.stream:
+        raise NotImplementedError("streaming is not supported yet")
+    else:
+        completions = []
+        prompt_tokens = 0
+        completion_tokens = 0
+        for i in range(request.n):
+            content = await generate_completion(payload)
+            content = json.loads(content)
+            content["index"] = i
+            completion_tokens += content["completion_tokens"]
+            prompt_tokens = content["prompt_tokens"]
+            content.pop("completion_tokens")
+            content.pop("prompt_tokens")
+            if request.echo:
+                content["text"] = request.prompt + content["text"]
+            completions.append(content)
+    return CompletionResponse(
+        model=request.model,
+        choices=completions,
+        usage={
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        },
+    )
+
+
+async def generate_completion(payload: Dict[str, Any]):
+    controller_url = app_settings.FASTCHAT_CONTROLLER_URL
+    async with httpx.AsyncClient() as client:
+        ret = await client.post(
+            controller_url + "/get_worker_address", json={"model": payload["model"]}
+        )
+        worker_addr = ret.json()["address"]
+        # No available worker
+        if worker_addr == "":
+            raise ValueError(f"No available worker for {payload['model']}")
+
+        logger.debug(f"model_name: {payload['model']}, worker_addr: {worker_addr}")
+
+        response = await client.post(
+            worker_addr + "/worker_generate_completion",
+            headers=headers,
+            json=payload,
+            timeout=20,
+        )
+        completion = response.json()
+        return completion
+
+
+@app.post("/v1/create_embeddings")
+async def create_embeddings(request: EmbeddingsRequest):
+    """Creates embeddings for the text"""
+
+    def generate_embeddings_payload(model_name: str, input: str):
+        payload = {
+            "model": model_name,
+            "input": input,
+        }
+        return payload
+
+    embeddings_payload = generate_embeddings_payload(request.model, request.input)
+    embedding = await get_embedding(embeddings_payload)
+    embedding = json.loads(embedding)
+    data = [{"object": "embedding", "embedding": embedding["embedding"], "index": 0}]
+    return EmbeddingsResponse(
+        data=data,
+        model=request.model,
+        usage={
+            "prompt_tokens": embedding["token_num"],
+            "total_tokens": embedding["token_num"],
+        },
+    )
+
+
+async def get_embedding(payload: Dict[str, Any]):
+    controller_url = app_settings.FASTCHAT_CONTROLLER_URL
+    model_name = payload["model"]
+    async with httpx.AsyncClient() as client:
+        ret = await client.post(
+            controller_url + "/get_worker_address", json={"model": model_name}
+        )
+        worker_addr = ret.json()["address"]
+        if worker_addr == "":
+            raise ValueError(f"No available worker for {model_name}")
+
+        logger.debug(f"model_name: {model_name}, worker_addr: {worker_addr}")
+
+        response = await client.post(
+            worker_addr + "/worker_get_embeddings",
+            headers=headers,
+            json=payload,
+            timeout=20,
+        )
+        embedding = response.json()
+        return embedding
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="FastChat ChatGPT-compatible Restful API server.")
+    parser = argparse.ArgumentParser(
+        description="FastChat ChatGPT-compatible Restful API server."
+    )
     parser.add_argument("--host", type=str, default="localhost", help="host name")
     parser.add_argument("--port", type=int, default=8000, help="port number")
- 
+    parser.add_argument(
+        "--allow-credentials", action="store_true", help="allow credentials"
+    )
+    parser.add_argument(
+        "--allowed-origins", type=json.loads, default=["*"], help="allowed origins"
+    )
+    parser.add_argument(
+        "--allowed-methods", type=json.loads, default=["*"], help="allowed methods"
+    )
+    parser.add_argument(
+        "--allowed-headers", type=json.loads, default=["*"], help="allowed headers"
+    )
+
     args = parser.parse_args()
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=args.allowed_origins,
+        allow_credentials=args.allow_credentials,
+        allow_methods=args.allowed_methods,
+        allow_headers=args.allowed_headers,
+    )
+
+    logger.debug(f"==== args ====\n{args}")
+
     uvicorn.run("fastchat.serve.api:app", host=args.host, port=args.port, reload=True)

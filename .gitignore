@@ -22,3 +22,6 @@ output
 venv
 log/*
 !log/.gitkeep
+
+# Data
+*.pkl
