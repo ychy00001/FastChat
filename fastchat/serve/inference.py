@@ -178,6 +178,7 @@ def generate_stream(
         model, tokenizer, params, device, context_len=2048, stream_interval=2
 ):
     prompt = params["prompt"]
+    l_prompt = len(prompt)
     history = params.get("history", None)
     template = params.get("template", None)
     len_prompt = len(prompt)
@@ -282,6 +283,12 @@ def generate_stream(
                 if pos != -1:
                     output = output[:pos]
                     stopped = True
+            if template is not None and template == "normal":
+                output = output.split("### Response:")[1].strip()
+            elif template is not None and template == "chat":
+                output = output.split("### Assistant:")[1].strip()
+            # else:
+                # output = output[l_prompt:]
             yield output
 
         if stopped:
@@ -302,7 +309,7 @@ CHAT_TEMPLATE = (
     "If you are a artificial intelligence assistant, "
     "please answer the user questions based on the user asks and descriptions."
     "History:{history}\n"
-    "User:{instruction}\nAssistant:"
+    "User:{instruction}\n### Assistant:"
 )
 
 
@@ -375,8 +382,10 @@ def generate_base(model, tokenizer, params, device,
         )
         s = generation_output[0]
         output = tokenizer.decode(s, skip_special_tokens=True)
-        if template is not None:
+        if template is not None and template == "normal":
             output = output.split("### Response:")[1].strip()
+        elif template is not None and template == "chat":
+            output = output.split("### Assistant:")[1].strip()
         else:
             # remote prompt
             output = output[l_prompt:]
