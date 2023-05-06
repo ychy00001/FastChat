@@ -33,6 +33,7 @@ from fastchat.serve.ds_pip import DSPipeline
 import deepspeed
 import os
 
+
 def raise_warning_for_incompatible_cpu_offloading_configuration(device: str, load_8bit: bool, cpu_offloading: bool):
     if cpu_offloading:
         if not load_8bit:
@@ -41,14 +42,16 @@ def raise_warning_for_incompatible_cpu_offloading_configuration(device: str, loa
                           "Continuing without cpu-offloading enabled\n")
             return False
         if not "linux" in sys.platform:
-            warnings.warn("CPU-offloading is only supported on linux-systems due to the limited compatability with the bitsandbytes-package\n"
-                          "Continuing without cpu-offloading enabled\n")
+            warnings.warn(
+                "CPU-offloading is only supported on linux-systems due to the limited compatability with the bitsandbytes-package\n"
+                "Continuing without cpu-offloading enabled\n")
             return False
         if device != "cuda":
             warnings.warn("CPU-offloading is only enabled when using CUDA-devices\n"
                           "Continuing without cpu-offloading enabled\n")
             return False
     return cpu_offloading
+
 
 def get_gpu_memory(max_gpus=None):
     gpu_memory = []
@@ -62,8 +65,8 @@ def get_gpu_memory(max_gpus=None):
         with torch.cuda.device(gpu_id):
             device = torch.cuda.current_device()
             gpu_properties = torch.cuda.get_device_properties(device)
-            total_memory = gpu_properties.total_memory / (1024**3)
-            allocated_memory = torch.cuda.memory_allocated() / (1024**3)
+            total_memory = gpu_properties.total_memory / (1024 ** 3)
+            allocated_memory = torch.cuda.memory_allocated() / (1024 ** 3)
             available_memory = total_memory - allocated_memory
             gpu_memory.append(available_memory)
     return gpu_memory
@@ -81,8 +84,9 @@ def raise_warning_for_old_weights(model_path, model):
                 "3. Downgrade fschat to fschat==0.1.10 (Not recommonded).\n"
             )
 
+
 def load_model(
-    model_path, device, num_gpus, max_gpu_memory=None, load_8bit=False, cpu_offloading=False, debug=False
+        model_path, device, num_gpus, max_gpu_memory=None, load_8bit=False, cpu_offloading=False, debug=False
 ):
     cpu_offloading = raise_warning_for_incompatible_cpu_offloading_configuration(device, load_8bit, cpu_offloading)
     if device == "cpu":
@@ -114,7 +118,7 @@ def load_model(
         # raises an error on incompatible platforms
         from transformers import BitsAndBytesConfig
         if "max_memory" in kwargs:
-            kwargs["max_memory"]["cpu"] = str(math.floor(psutil.virtual_memory().available / 2**20)) + 'Mib'
+            kwargs["max_memory"]["cpu"] = str(math.floor(psutil.virtual_memory().available / 2 ** 20)) + 'Mib'
         kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit_fp32_cpu_offload=cpu_offloading)
         kwargs["load_in_8bit"] = load_8bit
     elif load_8bit:
@@ -122,7 +126,7 @@ def load_model(
             warnings.warn("8-bit quantization is not supported for multi-gpu inference.")
         else:
             return load_compress_model(model_path=model_path,
-                device=device, torch_dtype=kwargs["torch_dtype"])
+                                       device=device, torch_dtype=kwargs["torch_dtype"])
 
     if "chatglm" in model_path:
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
@@ -171,9 +175,11 @@ def load_model(
 
 @torch.inference_mode()
 def generate_stream(
-    model, tokenizer, params, device, context_len=2048, stream_interval=2
+        model, tokenizer, params, device, context_len=2048, stream_interval=2
 ):
     prompt = params["prompt"]
+    history = params.get("history", None)
+    template = params.get("template", None)
     len_prompt = len(prompt)
     temperature = float(params.get("temperature", 1.0))
     max_new_tokens = int(params.get("max_new_tokens", 256))
@@ -189,30 +195,38 @@ def generate_stream(
     stop_token_ids = params.get("stop_token_ids", None) or []
     stop_token_ids.append(tokenizer.eos_token_id)
 
-    input_ids = tokenizer(prompt).input_ids
+    raw_input_text = prompt
+    if template == "normal":
+        input_text = generate_prompt(instruction=raw_input_text)
+    elif template == "chat":
+        input_text = generate_chat_prompt(history=history, instruction=raw_input_text)
+    else:
+        input_text = raw_input_text
+
+    input_ids = tokenizer(input_text).input_ids
     input_echo_len = len(input_ids)
     output_ids = list(input_ids)
 
     if model.config.is_encoder_decoder:
-         max_src_len = context_len
+        max_src_len = context_len
     else:
-         max_src_len = context_len - max_new_tokens - 8
+        max_src_len = context_len - max_new_tokens - 8
 
     input_ids = input_ids[-max_src_len:]
 
     if model.config.is_encoder_decoder:
-         encoder_output = model.encoder(input_ids=torch.as_tensor([input_ids],
-                                                      device=device))[0]
-         start_ids = torch.as_tensor([[model.generation_config.decoder_start_token_id]],
-                     dtype=torch.int64, device=device)
+        encoder_output = model.encoder(input_ids=torch.as_tensor([input_ids],
+                                                                 device=device))[0]
+        start_ids = torch.as_tensor([[model.generation_config.decoder_start_token_id]],
+                                    dtype=torch.int64, device=device)
 
     for i in range(max_new_tokens):
         if i == 0:
             if model.config.is_encoder_decoder:
-                 out = model.decoder(input_ids=start_ids,
-                                     encoder_hidden_states=encoder_output,
-                                     use_cache=True)
-                 logits = model.lm_head(out[0])
+                out = model.decoder(input_ids=start_ids,
+                                    encoder_hidden_states=encoder_output,
+                                    use_cache=True)
+                logits = model.lm_head(out[0])
             else:
                 out = model(torch.as_tensor([input_ids], device=device), use_cache=True)
                 logits = out.logits
@@ -220,9 +234,9 @@ def generate_stream(
         else:
             if model.config.is_encoder_decoder:
                 out = model.decoder(input_ids=torch.as_tensor([[token]], device=device),
-                             encoder_hidden_states=encoder_output,
-                             use_cache=True,
-                             past_key_values=past_key_values)
+                                    encoder_hidden_states=encoder_output,
+                                    use_cache=True,
+                                    past_key_values=past_key_values)
 
                 logits = model.lm_head(out[0])
             else:
@@ -284,15 +298,27 @@ PROMPT_TEMPLATE = (
     "### Instruction:\n\n{instruction}\n\n### Response:\n\n"
 )
 
+CHAT_TEMPLATE = (
+    "If you are a artificial intelligence assistant, "
+    "please answer the user questions based on the user asks and descriptions."
+    "History:{history}\n"
+    "User:{instruction}\nAssistant:"
+)
+
 
 def generate_prompt(instruction):
     return PROMPT_TEMPLATE.format_map({'instruction': instruction})
+
+
+def generate_chat_prompt(history, instruction):
+    return CHAT_TEMPLATE.format_map({'history': history, 'instruction': instruction})
 
 
 # @torch.inference_mode()
 def generate_base(model, tokenizer, params, device,
                   context_len=2048):
     prompt = params["prompt"]
+    history = params.get("history", "")
     l_prompt = len(prompt)
     template = params.get("template", None)
     temperature = float(params.get("temperature", 0.2))
@@ -332,6 +358,8 @@ def generate_base(model, tokenizer, params, device,
         raw_input_text = prompt
         if template == "normal":
             input_text = generate_prompt(instruction=raw_input_text)
+        elif template == "chat":
+            input_text = generate_chat_prompt(history=history, instruction=raw_input_text)
         else:
             input_text = raw_input_text
         try:
@@ -409,17 +437,17 @@ class ChatIO(abc.ABC):
 
 
 def chat_loop(
-    model_path: str,
-    device: str,
-    num_gpus: int,
-    max_gpu_memory: str,
-    load_8bit: bool,
-    cpu_offloading: bool,
-    conv_template: Optional[str],
-    temperature: float,
-    max_new_tokens: int,
-    chatio: ChatIO,
-    debug: bool,
+        model_path: str,
+        device: str,
+        num_gpus: int,
+        max_gpu_memory: str,
+        load_8bit: bool,
+        cpu_offloading: bool,
+        conv_template: Optional[str],
+        temperature: float,
+        max_new_tokens: int,
+        chatio: ChatIO,
+        debug: bool,
 ):
     # Model
     model, tokenizer = load_model(
@@ -499,5 +527,6 @@ def add_model_args(parser):
         "--load-8bit", action="store_true", help="Use 8-bit quantization"
     )
     parser.add_argument(
-        "--cpu-offloading", action="store_true", help="Only when using 8-bit quantization: Offload excess weights to the CPU that don't fit on the GPU"
+        "--cpu-offloading", action="store_true",
+        help="Only when using 8-bit quantization: Offload excess weights to the CPU that don't fit on the GPU"
     )
