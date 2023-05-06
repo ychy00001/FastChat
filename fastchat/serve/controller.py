@@ -248,7 +248,7 @@ class Controller:
                 worker_addr + "/worker_generate_stream",
                 json=params,
                 stream=True,
-                timeout=15,
+                timeout=400,
             )
             for chunk in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
                 if chunk:
@@ -265,7 +265,7 @@ class Controller:
             response = requests.post(
                 worker_addr + "/worker_generate_completion",
                 json=params,
-                timeout=15,
+                timeout=400,
             )
             return response.json()
         except requests.exceptions.RequestException as e:
