@@ -225,6 +225,7 @@ class ModelWorker:
                 self.context_len,
                 args.stream_interval,
             ):
+                logger.info(f"output text: {output['text']}")
                 ret["text"] = output["text"]
             if "usage" in output:
                 ret["usage"] = output["usage"]

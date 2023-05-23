@@ -334,7 +334,7 @@ async def worker_api_generate_completion(request: Request):
     return output
 
 @app.post("/v1/chat/completions")
-async def worker_api_generate_completion(request: Request):
+async def v1_chat_generate_completion(request: Request):
     params = await request.json()
     output = controller.worker_api_generate_completion(params)
     return output

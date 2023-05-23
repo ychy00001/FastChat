@@ -203,10 +203,10 @@ def generate_stream(
                 else:
                     raise ValueError("Invalid stop field type.")
 
-            if template is not None and template == "normal":
-                output = output.split("### Response:")[1].strip()
-            elif template is not None and template == "chat":
-                output = output.split("### Response:")[1].strip()
+            # if template is not None and template == "normal":
+            #     output = output.split("### Response:")[1].strip()
+            # elif template is not None and template == "chat":
+            #     output = output.split("### Response:")[1].strip()
             # prevent yielding partial stop sequence
             if not partially_stopped:
                 yield {
@@ -230,10 +230,10 @@ def generate_stream(
     else:
         finish_reason = None
 
-    if template is not None and template == "normal":
-        output = output.split("### Response:")[1].strip()
-    elif template is not None and template == "chat":
-        output = output.split("### Response:")[1].strip()
+    # if template is not None and template == "normal":
+    #     output = output.split("### Response:")[1].strip()
+    # elif template is not None and template == "chat":
+    #     output = output.split("### Response:")[1].strip()
     yield {
         "text": output,
         "usage": {
