@@ -59,18 +59,18 @@ def heart_beat_worker(controller):
 
 class ModelWorker:
     def __init__(
-        self,
-        controller_addr,
-        worker_addr,
-        worker_id,
-        no_register,
-        model_path,
-        model_name,
-        device,
-        num_gpus,
-        max_gpu_memory,
-        load_8bit=False,
-        cpu_offloading=False,
+            self,
+            controller_addr,
+            worker_addr,
+            worker_id,
+            no_register,
+            model_path,
+            model_name,
+            device,
+            num_gpus,
+            max_gpu_memory,
+            load_8bit=False,
+            cpu_offloading=False,
     ):
         self.controller_addr = controller_addr
         self.worker_addr = worker_addr
@@ -150,16 +150,16 @@ class ModelWorker:
 
     def get_queue_length(self):
         if (
-            model_semaphore is None
-            or model_semaphore._value is None
-            or model_semaphore._waiters is None
+                model_semaphore is None
+                or model_semaphore._value is None
+                or model_semaphore._waiters is None
         ):
             return 0
         else:
             return (
-                args.limit_model_concurrency
-                - model_semaphore._value
-                + len(model_semaphore._waiters)
+                    args.limit_model_concurrency
+                    - model_semaphore._value
+                    + len(model_semaphore._waiters)
             )
 
     def get_status(self):
@@ -183,12 +183,12 @@ class ModelWorker:
     def generate_stream_gate(self, params):
         try:
             for output in self.generate_stream_func(
-                self.model,
-                self.tokenizer,
-                params,
-                self.device,
-                self.context_len,
-                args.stream_interval,
+                    self.model,
+                    self.tokenizer,
+                    params,
+                    self.device,
+                    self.context_len,
+                    args.stream_interval,
             ):
                 ret = {
                     "text": output["text"],
@@ -216,17 +216,22 @@ class ModelWorker:
 
     def generate_gate(self, params):
         try:
+            template = params.get("template", None)
             ret = {"text": "", "error_code": 0}
             for output in self.generate_stream_func(
-                self.model,
-                self.tokenizer,
-                params,
-                self.device,
-                self.context_len,
-                args.stream_interval,
+                    self.model,
+                    self.tokenizer,
+                    params,
+                    self.device,
+                    self.context_len,
+                    args.stream_interval,
             ):
-                logger.info(f"output text: {output['text']}")
-                ret["text"] = output["text"]
+                result = output['text']
+                if template is not None and template == "normal":
+                    result = result.split("### Response:")[1].strip()
+                elif template is not None and template == "chat":
+                    result = result.split("### Response:")[1].strip()
+                ret["text"] = result
             if "usage" in output:
                 ret["usage"] = output["usage"]
             if "finish_reason" in output:
@@ -249,7 +254,7 @@ class ModelWorker:
     def get_embeddings(self, params):
         try:
             tokenizer = self.tokenizer
-            is_llama = "llama" in str(type(self.model)) # vicuna support batch inference
+            is_llama = "llama" in str(type(self.model))  # vicuna support batch inference
             is_chatglm = "chatglm" in str(type(self.model))
             is_t5 = "t5" in str(type(self.model))
             if is_llama:
@@ -390,6 +395,7 @@ async def count_token(request: Request):
 async def model_details(request: Request):
     return {"context_length": worker.context_len}
 
+
 def check_port_in_use(port, host='127.0.0.1'):
     s = None
     try:
@@ -402,6 +408,7 @@ def check_port_in_use(port, host='127.0.0.1'):
     finally:
         if s:
             s.close()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
