@@ -1,28 +1,14 @@
-# Openai API
-<!-- (Experimental. We will keep improving the API and SDK.) -->
+# OpenAI-Compatible RESTful APIs & SDK
 
-## Chat Completion
+FastChat provides OpenAI-Compatible APIs for its supported models, so you can use FastChat as a local drop-in replacement for OpenAI APIs.
+The FastChat server is compatible with both [openai-python](https://github.com/openai/openai-python) library and cURL commands.
 
-Reference: https://platform.openai.com/docs/api-reference/chat/create
+The following OpenAI APIs are supported:
+- Chat Completions. (Reference: https://platform.openai.com/docs/api-reference/chat)
+- Completions. (Reference: https://platform.openai.com/docs/api-reference/completions)
+- Embeddings. (Reference: https://platform.openai.com/docs/api-reference/embeddings)
 
-Some features/compatibilities to be implemented:
-
-- [ ] streaming
-- [ ] support of some parameters like `top_p`, `presence_penalty`
-- [ ] proper error handling (e.g. model not found)
-- [ ] the return value in the client SDK could be used like a dict
-
-## Create Embedding
-
-Reference: https://platform.openai.com/docs/api-reference/embeddings
-
-## Text Completion
-
-Reference: https://platform.openai.com/docs/api-reference/completions/create
-
-
-**RESTful API Server**
-
+## RESTful API Server
 First, launch the controller
 
 ```bash
@@ -38,32 +24,64 @@ python3 -m fastchat.serve.model_worker --model-name 'vicuna-7b-v1.1' --model-pat
 Finally, launch the RESTful API server
 
 ```bash
-export FASTCHAT_CONTROLLER_URL=http://localhost:21001
-python3 -m fastchat.serve.api --host localhost --port 8000
+python3 -m fastchat.serve.openai_api_server --host localhost --port 8000
 ```
 
-Test the API server
+Now, let us test the API server.
 
+### OpenAI Official SDK
+The goal of `openai_api_server.py` is to implement a fully OpenAI-compatible API server, so the models can be used directly with [openai-python](https://github.com/openai/openai-python) library.
+
+First, install openai-python:
 ```bash
-# chat completion
+pip install --upgrade openai
+```
+
+Then, interact with model vicuna:
+```python
+import openai
+openai.api_key = "EMPTY" # Not support yet
+openai.api_base = "http://localhost:8000/v1"
+
+model = "vicuna-7b-v1.1"
+prompt = "Once upon a time"
+
+# create a completion
+completion = openai.Completion.create(model=model, prompt=prompt, max_tokens=64)
+# print the completion
+print(prompt + completion.choices[0].text)
+
+# create a chat completion
+completion = openai.ChatCompletion.create(
+  model=model,
+  messages=[{"role": "user", "content": "Hello! What is your name?"}]
+)
+# print the completion
+print(completion.choices[0].message.content)
+```
+
+Streaming is also supported. See [test_openai_sdk.py](../tests/test_openai_sdk.py).
+
+### cURL
+cURL is another good tool for observing the output of the api.
+
+List Models:
+```bash
+curl http://localhost:8000/v1/models
+```
+
+Chat Completions:
+```bash
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "vicuna-7b-v1.1",
-    "messages": [{"role": "user", "content": "Hello!"}]
+    "messages": [{"role": "user", "content": "Hello! What is your name?"}]
   }'
 ```
+
+Text Completions:
 ```bash
-# create embedding
-curl http://localhost:8000/v1/create_embeddings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "vicuna-7b-v1.1",
-    "input": "Hello, can you tell me a joke"
-  }'
-```
-```bash
-# text completion
 curl http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -74,39 +92,24 @@ curl http://localhost:8000/v1/completions \
   }'
 ```
 
-**Client SDK**
-
-Assuming environment variable `FASTCHAT_BASEURL` is set to the API server URL (e.g., `http://localhost:8000`), you can use the following code to send a request to the API server:
-
-```python
-import os
-from fastchat import client
-
-client.set_baseurl(os.getenv("FASTCHAT_BASEURL"))
-
-completion = client.ChatCompletion.create(
-  model="vicuna-7b-v1.1",
-  messages=[
-    {"role": "user", "content": "Hello!"}
-  ]
-)
-
-print(completion.choices[0].message)
+Embeddings:
+```bash
+curl http://localhost:8000/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "vicuna-7b-v1.1",
+    "input": "Hello world!"
+  }'
 ```
 
-**Machine Learning with Embeddings**
+## Adjusting Timeout
+By default, a timeout error will occur if a model worker does not response within 20 seconds. If your model/hardware is slower, you can change this timeout through an environment variable: `export FASTCHAT_WORKER_API_TIMEOUT=<larger timeout in seconds>`
 
-See [fastchat/playground/test_embedding/test_sentence_similarity.py](../playground/test_embedding/test_sentence_similarity.py)
+## Todos
+Some features to be implemented:
 
-Feel free to use `create_embedding` to 
-- build your own classifier, see [fastchat/playground/test_embedding/test_classification.py](../playground/test_embedding/test_classification.py)
-- evaluate texts' similarity, see [fastchat/playground/test_embedding/test_sentence_similarity.py](../playground/test_embedding/test_sentence_similarity.py)
-- search relative texts, see [fastchat/playground/test_embedding/test_semantic_search.py](../playground/test_embedding/test_semantic_search.py)
-
-To run the tests, you need to download the data [here](https://www.kaggle.com/datasets/snap/amazon-fine-food-reviews), and openai api key is required to make comparation.
-
-Run with:
-~~~bash
-python3 playground/test_embedding/test_classification.py
-~~~
-and you will train a classifier based on `vicuna-7b`, `text-similarity-ada-001` and `text-embedding-ada-002`
+- [ ] Support more parameters like `logprobs`, `logit_bias`, `user`, `presence_penalty` and `frequency_penalty`
+- [ ] Model details (permissions, owner and create time)
+- [ ] Edits API
+- [ ] Authentication and API key
+- [ ] Rate Limitation Settings

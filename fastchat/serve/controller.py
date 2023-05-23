@@ -18,37 +18,14 @@ import numpy as np
 import requests
 import uvicorn
 
-from fastchat.constants import CONTROLLER_HEART_BEAT_EXPIRATION
-from fastchat.utils import build_logger, server_error_msg
+from fastchat.constants import (CONTROLLER_HEART_BEAT_EXPIRATION, ErrorCode,
+    SERVER_ERROR_MSG)
+from fastchat.utils import build_logger
 
 logger = build_logger("controller", "/data/project/FastChat/log/controller.log")
 
 
-def post_process_code(code):
-    sep = "\n```"
-    if sep in code:
-        blocks = code.split(sep)
-        if len(blocks) % 2 == 1:
-            for i in range(1, len(blocks), 2):
-                blocks[i] = blocks[i].replace("\\_", "_")
-        code = sep.join(blocks)
-    return code
-
-
-def compute_skip_echo_len(model_name, prompt):
-    model_name = model_name.lower()
-    if "chatglm" in model_name:
-        # skip_echo_len = len(state_message[-2][1]) + 1
-        skip_echo_len = 1
-    elif "dolly" in model_name:
-        special_toks = ["### Instruction:", "### Response:", "### End"]
-        prompt_tmp = prompt
-        for tok in special_toks:
-            prompt_tmp = prompt_tmp.replace(tok, "")
-        skip_echo_len = len(prompt_tmp)
-    else:
-        skip_echo_len = len(prompt) + 1 - prompt.count("</s>") * 3
-    return skip_echo_len
+logger = build_logger("controller", "controller.log")
 
 
 class DispatchMethod(Enum):
@@ -222,26 +199,26 @@ class Controller:
         for worker_name in to_delete:
             self.remove_worker(worker_name)
 
-    def handle_no_worker(params, server_error_msg):
+    def handle_no_worker(params):
         logger.info(f"no worker: {params['model']}")
         ret = {
-            "text": server_error_msg,
-            "error_code": 2,
+            "text": SERVER_ERROR_MSG,
+            "error_code": ErrorCode.CONTROLLER_NO_WORKER,
         }
         return json.dumps(ret).encode() + b"\0"
 
-    def handle_worker_timeout(worker_address, server_error_msg):
+    def handle_worker_timeout(worker_address):
         logger.info(f"worker timeout: {worker_address}")
         ret = {
-            "text": server_error_msg,
-            "error_code": 3,
+            "text": SERVER_ERROR_MSG,
+            "error_code": ErrorCode.CONTROLLER_WORKER_TIMEOUT,
         }
         return json.dumps(ret).encode() + b"\0"
 
     def worker_api_generate_stream(self, params):
         worker_addr = self.get_worker_address(params["model"])
         if not worker_addr:
-            yield self.handle_no_worker(params, server_error_msg)
+            yield self.handle_no_worker(params)
 
         try:
             response = requests.post(
@@ -254,12 +231,12 @@ class Controller:
                 if chunk:
                     yield chunk + b"\0"
         except requests.exceptions.RequestException as e:
-            yield self.handle_worker_timeout(worker_addr, server_error_msg)
+            yield self.handle_worker_timeout(worker_addr)
 
     def worker_api_generate_completion(self, params):
         worker_addr = self.get_worker_address(params["model"])
         if not worker_addr:
-            return self.handle_no_worker(params, server_error_msg)
+            return self.handle_no_worker(params)
 
         try:
             response = requests.post(
@@ -269,12 +246,12 @@ class Controller:
             )
             return response.json()
         except requests.exceptions.RequestException as e:
-            return self.handle_worker_timeout(worker_addr, server_error_msg)
+            return self.handle_worker_timeout(worker_addr)
 
     def worker_api_embeddings(self, params):
         worker_addr = self.get_worker_address(params["model"])
         if not worker_addr:
-            return self.handle_no_worker(params, server_error_msg)
+            return self.handle_no_worker(params)
 
         try:
             response = requests.post(
@@ -284,42 +261,7 @@ class Controller:
             )
             return response.json()
         except requests.exceptions.RequestException as e:
-            return self.handle_worker_timeout(worker_addr, server_error_msg)
-
-    def worker_api_generate(self, params):
-        '''
-        stream流读取模型结果
-        :param params:
-        :return:
-        '''
-        content_stream = self.worker_api_generate_stream(params)
-        result = ""
-        skip_echo_len = compute_skip_echo_len(params["model"], params["prompt"])
-
-        for str_chunk in content_stream:
-            data = json.loads(str_chunk.split(b"\0")[0])
-            if data["error_code"] == 0:
-                output = data["text"][skip_echo_len:].strip()
-                output = post_process_code(output)
-                result = output
-            else:
-                output = data["text"] + f" (error_code: {data['error_code']})"
-                return output
-            time.sleep(0.02)
-        return result
-
-    def worker_api_base(self, params):
-        worker_addr = self.get_worker_address(params["model"])
-        if not worker_addr:
-            logger.info(f"no worker: {params['model']}")
-            return server_error_msg
-        try:
-            response = requests.post(worker_addr + "/worker_generate_base",
-                                     json=params, timeout=500)
-            return json.loads(response.content)["text"]
-        except requests.exceptions.RequestException as e:
-            logger.info(f"worker timeout: {worker_addr}")
-            return e.strerror
+            return self.handle_worker_timeout(worker_addr)
 
     # Let the controller act as a worker to achieve hierarchical
     # management. This can be used to connect isolated sub networks.
@@ -397,15 +339,6 @@ async def worker_api_embeddings(request: Request):
     params = await request.json()
     output = controller.worker_api_embeddings(params)
     return output
-
-@app.post("/worker_base")
-async def worker_api_generate(request: Request):
-    params = await request.json()
-    if params["auth"] == "TFof5o2HCi89znJh2v":
-        result = controller.worker_api_base(params)
-        return {"text": result}
-    return {"error": "授权异常"}
-
 
 @app.post("/worker_get_status")
 async def worker_api_get_status(request: Request):

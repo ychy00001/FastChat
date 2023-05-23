@@ -3,13 +3,12 @@ __pycache__
 *.pyc
 *.egg-info
 dist
+.venv
 
 # Log
 *.log
+*.log.*
 *.json
-
-# Data
-!**/alpaca-data-conversation.json
 
 # Editor
 .idea
@@ -25,3 +24,7 @@ log/*
 
 # Data
 *.pkl
+*.csv
+
+# Build
+build
