@@ -333,6 +333,11 @@ async def worker_api_generate_completion(request: Request):
     output = controller.worker_api_generate_completion(params)
     return output
 
+@app.post("/v1/chat/completions")
+async def worker_api_generate_completion(request: Request):
+    params = await request.json()
+    output = controller.worker_api_generate_completion(params)
+    return output
 
 @app.post("/worker_get_embeddings")
 async def worker_api_embeddings(request: Request):
