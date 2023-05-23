@@ -29,8 +29,6 @@ from fastchat.serve.monkey_patch_non_inplace import (
     replace_llama_attn_with_non_inplace_operations,
 )
 from fastchat.serve.serve_chatglm import chatglm_generate_stream
-from fastchat.serve.ds_pip import DSPipeline
-import deepspeed
 import os
 
 
@@ -389,46 +387,6 @@ def generate_base(model, tokenizer, params, device,
             # remote prompt
             output = output[l_prompt:]
         return output
-
-
-def generate_ds(model, tokenizer, params, device,
-                num_gpus):
-    """
-    Deepspeed 模型加速
-    """
-    world_size = int(os.getenv('WORLD_SIZE', str(num_gpus)))
-    local_rank = int(os.getenv('LOCAL_RANK', '0'))
-    prompt = params["prompt"]
-    l_prompt = len(prompt)
-    template = params.get("template", None)
-    temperature = float(params.get("temperature", 0.5))
-    max_new_tokens = int(params.get("max_new_tokens", 4000))
-    top_k = int(params.get("top_k", 50))
-    top_p = float(params.get("top_p", 1.0))
-    do_sample = bool(params.get("do_sample", True))
-    repetition_penalty = float(params.get("repetition_penalty", 1.0))
-    print(f'do_sample: {do_sample}')
-    print(f'repetition_penalty: {repetition_penalty}')
-    assert isinstance(top_k, int) and top_k >= 0, "`top_k` should be a positive integer."
-    assert 0 <= top_p <= 1, "`top_p` should be between 0 and 1."
-    data_type = torch.float16
-    pipe = DSPipeline(model=model,
-                      tokenizer=tokenizer,
-                      dtype=data_type,
-                      device=local_rank)
-    pipe.model = deepspeed.init_inference(pipe.model,
-                                          dtype=data_type,
-                                          mp_size=num_gpus,
-                                          replace_with_kernel_inject=True,
-                                          replace_method="auto",
-                                          max_tokens=4000,
-                                          )
-    outputs = pipe([prompt],
-                   # outputs = pipe(input_ids,
-                   num_tokens=max_new_tokens,
-                   do_sample=do_sample)
-    return outputs[0]
-
 
 class ChatIO(abc.ABC):
     @abc.abstractmethod

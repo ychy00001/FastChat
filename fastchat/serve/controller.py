@@ -321,19 +321,6 @@ class Controller:
             logger.info(f"worker timeout: {worker_addr}")
             return e.strerror
 
-    def worker_api_ds(self, params):
-        worker_addr = self.get_worker_address(params["model"])
-        if not worker_addr:
-            logger.info(f"no worker: {params['model']}")
-            return server_error_msg
-        try:
-            response = requests.post(worker_addr + "/worker_generate_ds",
-                                     json=params, timeout=500)
-            return json.loads(response.content)["text"]
-        except requests.exceptions.RequestException as e:
-            logger.info(f"worker timeout: {worker_addr}")
-            return e.strerror
-
     # Let the controller act as a worker to achieve hierarchical
     # management. This can be used to connect isolated sub networks.
     def worker_api_get_status(self):
@@ -416,15 +403,6 @@ async def worker_api_generate(request: Request):
     params = await request.json()
     if params["auth"] == "TFof5o2HCi89znJh2v":
         result = controller.worker_api_base(params)
-        return {"text": result}
-    return {"error": "授权异常"}
-
-
-@app.post("/worker_ds")
-async def worker_api_generate(request: Request):
-    params = await request.json()
-    if params["auth"] == "TFof5o2HCi89znJh2v":
-        result = controller.worker_api_ds(params)
         return {"text": result}
     return {"error": "授权异常"}
 

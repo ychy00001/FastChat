@@ -37,9 +37,10 @@ import uvicorn
 
 from fastchat.constants import WORKER_HEART_BEAT_INTERVAL
 from fastchat.serve.serve_chatglm import chatglm_generate_stream
-from fastchat.serve.inference import load_model, generate_stream, add_model_args, generate_base, generate_ds
+from fastchat.serve.inference import load_model, generate_stream, add_model_args, generate_base
 
 from fastchat.utils import build_logger, server_error_msg, pretty_print_semaphore
+
 GB = 1 << 30
 
 worker_id = str(uuid.uuid4())[:6]
@@ -57,18 +58,18 @@ def heart_beat_worker(controller):
 
 class ModelWorker:
     def __init__(
-        self,
-        controller_addr,
-        worker_addr,
-        worker_id,
-        no_register,
-        model_path,
-        model_name,
-        device,
-        num_gpus,
-        max_gpu_memory,
-        load_8bit=False,
-        cpu_offloading=False,
+            self,
+            controller_addr,
+            worker_addr,
+            worker_id,
+            no_register,
+            model_path,
+            model_name,
+            device,
+            num_gpus,
+            max_gpu_memory,
+            load_8bit=False,
+            cpu_offloading=False,
     ):
         self.controller_addr = controller_addr
         self.worker_addr = worker_addr
@@ -146,16 +147,16 @@ class ModelWorker:
 
     def get_queue_length(self):
         if (
-            model_semaphore is None
-            or model_semaphore._value is None
-            or model_semaphore._waiters is None
+                model_semaphore is None
+                or model_semaphore._value is None
+                or model_semaphore._waiters is None
         ):
             return 0
         else:
             return (
-                args.limit_model_concurrency
-                - model_semaphore._value
-                + len(model_semaphore._waiters)
+                    args.limit_model_concurrency
+                    - model_semaphore._value
+                    + len(model_semaphore._waiters)
             )
 
     def get_status(self):
@@ -168,12 +169,12 @@ class ModelWorker:
     def generate_stream_gate(self, params):
         try:
             for output in self.generate_stream_func(
-                self.model,
-                self.tokenizer,
-                params,
-                self.device,
-                self.context_len,
-                args.stream_interval,
+                    self.model,
+                    self.tokenizer,
+                    params,
+                    self.device,
+                    self.context_len,
+                    args.stream_interval,
             ):
                 ret = {
                     "text": output,
@@ -195,12 +196,12 @@ class ModelWorker:
                 do_sample=True,
                 temperature=params["temperature"],
                 max_new_tokens=params["max_tokens"]
-                - 1,  # generate max_new_tokens + 1 tokens
+                               - 1,  # generate max_new_tokens + 1 tokens
             )
             if self.model.config.is_encoder_decoder:
                 output_ids = output_ids[0]
             else:
-                output_ids = output_ids[0][len(input_ids[0]) :]
+                output_ids = output_ids[0][len(input_ids[0]):]
             outputs = self.tokenizer.decode(
                 output_ids,
                 skip_special_tokens=True,
@@ -236,7 +237,7 @@ class ModelWorker:
             model_output = self.model(input_ids, output_hidden_states=True)
             is_chatglm = "chatglm" in str(type(self.model)).lower()
             if is_chatglm:
-                data = (model_output.hidden_states[-1].transpose(0,1))[0]
+                data = (model_output.hidden_states[-1].transpose(0, 1))[0]
             else:
                 data = model_output.hidden_states[-1][0]
             embedding = torch.mean(data, dim=0)
@@ -256,21 +257,6 @@ class ModelWorker:
     def generate_base_gate(self, params):
         try:
             result = generate_base(self.model, self.tokenizer, params, self.device, self.context_len)
-            ret = {
-                "text": result,
-                "error_code": 0,
-            }
-            return ret
-        except torch.cuda.OutOfMemoryError:
-            ret = {
-                "text": server_error_msg,
-                "error_code": 1,
-            }
-            return ret
-
-    def generate_ds_gate(self,params):
-        try:
-            result = generate_ds(self.model, self.tokenizer, params, self.device, self.num_gpus)
             ret = {
                 "text": result,
                 "error_code": 0,
@@ -341,19 +327,6 @@ async def api_generate_base(request: Request):
         model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
     await model_semaphore.acquire()
     generator = worker.generate_base_gate(params)
-    release_model_semaphore()
-    return generator
-
-
-@app.post("/worker_generate_ds")
-async def api_generate_ds(request: Request):
-    global model_semaphore, global_counter
-    global_counter += 1
-    params = await request.json()
-    if model_semaphore is None:
-        model_semaphore = asyncio.Semaphore(args.limit_model_concurrency)
-    await model_semaphore.acquire()
-    generator = worker.generate_ds_gate(params)
     release_model_semaphore()
     return generator
 
