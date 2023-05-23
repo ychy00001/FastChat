@@ -75,11 +75,11 @@ def generate_stream(
 
     raw_input_text = prompt
     if template == "normal":
-        input_text = generate_prompt(instruction=raw_input_text)
+        prompt = generate_prompt(instruction=raw_input_text)
     elif template == "chat":
-        input_text = generate_chat_prompt(history=history, instruction=raw_input_text)
+        prompt = generate_chat_prompt(history=history, instruction=raw_input_text)
     else:
-        input_text = raw_input_text
+        prompt = raw_input_text
 
 
     logits_processor = prepare_logits_processor(
